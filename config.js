@@ -107,15 +107,23 @@ module.exports = {
     // CORS
     cors: {
       origin: function(origin, callback) {
-        const allowedOrigins = [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://127.0.0.1:3000'];
+        const allowedOrigins = [
+          process.env.FRONTEND_URL || 'http://localhost:3000', 
+          'http://127.0.0.1:3000',
+          'https://renomeador-nf-gdm-frontend.onrender.com',
+          'https://renomeador-nf-gdm-frontend-4all.onrender.com'
+        ];
         // Permitir requisições sem origin (como mobile apps ou curl)
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
           callback(null, true);
         } else {
-          callback(new Error('Não permitido por CORS'));
+          console.log('Origem bloqueada por CORS:', origin);
+          callback(null, true); // Temporariamente permitindo todas as origens
         }
       },
-      credentials: true
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization']
     }
   },
 
