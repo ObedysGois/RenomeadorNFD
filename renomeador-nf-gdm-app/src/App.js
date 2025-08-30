@@ -65,7 +65,8 @@ function App() {
 
   const clearAllFiles = async () => {
     try {
-      await axios.delete('http://localhost:5000/files');
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      await axios.delete(`${API_URL}/files`);
       setSavedFiles([]);
       setProcessedFiles([]);
       setMessage('Todos os arquivos foram removidos');
@@ -211,7 +212,7 @@ function App() {
                     <span className="file-size">{formatFileSize(file.size)}</span>
                   </div>
                   <a 
-                    href={`http://localhost:5000${file.path}`} 
+                    href={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${file.path}`} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="download-btn small"
