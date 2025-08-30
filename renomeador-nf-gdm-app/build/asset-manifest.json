@@ -1,0 +1,16 @@
+{
+  "files": {
+    "main.css": "/static/css/main.e48bfe84.css",
+    "main.js": "/static/js/main.317259c0.js",
+    "static/js/453.163cd138.chunk.js": "/static/js/453.163cd138.chunk.js",
+    "static/media/docemellogo1.png": "/static/media/docemellogo1.ae5434fad91fc65910a0.png",
+    "index.html": "/index.html",
+    "main.e48bfe84.css.map": "/static/css/main.e48bfe84.css.map",
+    "main.317259c0.js.map": "/static/js/main.317259c0.js.map",
+    "453.163cd138.chunk.js.map": "/static/js/453.163cd138.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e48bfe84.css",
+    "static/js/main.317259c0.js"
+  ]
+}
