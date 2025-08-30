@@ -8,6 +8,7 @@ const { PDFDocument } = require('pdf-lib');
 const xlsx = require('xlsx');
 const config = require('../config');
 const csvParse = require('csv-parse/sync');
+const archiver = require('archiver');
 
 const app = express();
 const port = config.server.port;
@@ -332,6 +333,55 @@ app.get('/files', (req, res) => {
     } catch (error) {
         console.error('Erro ao listar arquivos:', error);
         res.status(500).json({ error: 'Erro ao listar arquivos' });
+    }
+});
+
+// Endpoint para download de todos os arquivos em ZIP
+app.get('/download-all', (req, res) => {
+    try {
+        const files = fs.readdirSync(processedPdfsDir);
+        
+        if (files.length === 0) {
+            return res.status(404).json({ error: 'Não há arquivos para download' });
+        }
+        
+        const zipFileName = `notas-fiscais-${new Date().toISOString().slice(0, 10)}.zip`;
+        const zipFilePath = path.join(processedPdfsDir, zipFileName);
+        
+        const output = fs.createWriteStream(zipFilePath);
+        const archive = archiver('zip', {
+            zlib: { level: 9 } // Nível máximo de compressão
+        });
+        
+        output.on('close', () => {
+            console.log(`Arquivo ZIP criado: ${zipFilePath} (${archive.pointer()} bytes)`);
+            res.download(zipFilePath, zipFileName, (err) => {
+                if (err) {
+                    console.error('Erro ao fazer download do arquivo ZIP:', err);
+                    res.status(500).send('Erro ao fazer download do arquivo ZIP.');
+                }
+                // Remover o arquivo ZIP após o download
+                fs.unlinkSync(zipFilePath);
+            });
+        });
+        
+        archive.on('error', (err) => {
+            console.error('Erro ao criar arquivo ZIP:', err);
+            res.status(500).send('Erro ao criar arquivo ZIP.');
+        });
+        
+        archive.pipe(output);
+        
+        // Adicionar todos os arquivos ao ZIP
+        files.forEach(file => {
+            const filePath = path.join(processedPdfsDir, file);
+            archive.file(filePath, { name: file });
+        });
+        
+        archive.finalize();
+    } catch (error) {
+        console.error('Erro ao criar arquivo ZIP:', error);
+        res.status(500).json({ error: 'Erro ao criar arquivo ZIP' });
     }
 });
 
