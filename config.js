@@ -84,7 +84,7 @@ module.exports = {
     maxFileSize: 10 * 1024 * 1024, // 10MB
     
     // Número máximo de arquivos por upload
-    maxFiles: 50
+    maxFiles: 100
   },
 
   // Configurações de logging
@@ -130,9 +130,15 @@ module.exports = {
   // Configurações de performance
   performance: {
     // Timeout para processamento de PDF (em ms)
-    pdfTimeout: 30000,
+    pdfTimeout: 60000, // Aumentado para 60 segundos para arquivos maiores
     
     // Número máximo de arquivos processados simultaneamente
-    maxConcurrentFiles: 5
+    maxConcurrentFiles: 10, // Aumentado para processar mais arquivos em paralelo
+    
+    // Tamanho do lote para processamento em batch
+    batchSize: 20, // Processar em lotes de 20 arquivos
+    
+    // Intervalo entre lotes (ms)
+    batchInterval: 500 // Pequena pausa entre lotes para liberar recursos
   }
 };

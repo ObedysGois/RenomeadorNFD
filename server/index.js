@@ -103,24 +103,201 @@ app.get('/', (req, res) => {
     });
 });
 
+// Função para processar um único arquivo PDF
+async function processFile(file, uploadDir, processedPdfsDir, clientesData) {
+    const filePath = path.join(uploadDir, file.filename);
+    console.log('Processando arquivo:', filePath, fs.existsSync(filePath));
+    let extractedData = {};
+    try {
+        const dataBuffer = fs.readFileSync(filePath);
+        const pdf = await PDFParser(dataBuffer, {
+            // Definir um timeout para evitar que arquivos problemáticos travem o processamento
+            timeout: config.performance.pdfTimeout
+        });
+        const text = pdf.text;
+        
+        // Extração de dados do PDF
+        const extractData = (pdfText) => {
+            const data = {};
+
+            // 1. Razão Social
+            const razaoMatch = pdfText.match(/IDENTIFICA[ÇC][ÃA]O DO EMITENTE\n([A-Z0-9\s\/\-\.]+)\n/);
+            data.razaoSocial = razaoMatch ? razaoMatch[1].trim() : '';
+
+            // 2. Número da NF
+            const numeroNFMatch = pdfText.match(/N[ºo\.]*\s*([0-9\.]+)/i);
+            data.numeroNF = numeroNFMatch ? numeroNFMatch[1].replace(/\D/g, '') : 'N/A';
+
+            // 3. Natureza da Operação
+            const naturezaMatch = pdfText.match(/NATUREZA DA OP[ÊE]RA[ÇC][ÃA]O[\s:]*([A-Z\s]+)/i);
+            if (naturezaMatch) {
+                data.naturezaOperacao = naturezaMatch[1].split('\n')[0].trim();
+            } else {
+                const devMatch = pdfText.match(/\n\s*(DEV\w+)/i);
+                data.naturezaOperacao = devMatch ? devMatch[1].trim() : 'N/A';
+            }
+
+            // 4. CNPJ
+            const cnpjMatch = pdfText.match(/CNPJ[\s:]*([0-9\.\/\-]+)/i);
+            data.cnpjEmitente = cnpjMatch ? cnpjMatch[1] : 'N/A';
+
+            // 5. Data de Emissão
+            const dataEmissaoMatch = pdfText.match(/DATA DA EMISS[ÃA]O[\s:]*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/i);
+            data.dataEmissao = dataEmissaoMatch ? dataEmissaoMatch[1] : 'N/A';
+
+            // 6. Valor Total
+            const valorTotalMatch = pdfText.match(/V\.\s*TOTAL DA NOTA[\s:]*([0-9\.,]+)/i);
+            data.valorTotal = valorTotalMatch ? valorTotalMatch[1].replace(/[^0-9\,\.]/g, '') : 'N/A';
+
+            // 7 e 8. Número Adicional e Motivo
+            const dadosAdicionaisMatch = pdfText.match(/INFORMA[ÇC][ÕO]ES COMPLEMENTARES[\s\S]*?N[ºo\.]*\s*([0-9]+)[\s\S]*?Motivo:\s*([A-Za-z\s]+)/i);
+            const refProdutoMatch = pdfText.match(/Ref\.\s*NF:\s*([0-9]+),\s*Serie\s*[0-9]+,\s*de\s*[0-9]{2}\/[0-9]{2}\/[0-9]{4}/i);
+            const motivoMatch = pdfText.match(/Motivo:\s*([^\-\n]+)\s*\-/i);
+            
+            if (dadosAdicionaisMatch) {
+                data.numeroAdicional = dadosAdicionaisMatch[1];
+                data.motivoAdicional = dadosAdicionaisMatch[2].trim();
+            } else if (refProdutoMatch || motivoMatch) {
+                data.numeroAdicional = refProdutoMatch ? refProdutoMatch[1] : '';
+                data.motivoAdicional = motivoMatch ? motivoMatch[1].trim() : '';
+            } else {
+                data.numeroAdicional = '';
+                data.motivoAdicional = '';
+            }
+
+            // 9. CFOP
+            const cfopMatches = pdfText.match(/\b(2411|5202|6202)\b/g);
+            const cfopLinha = pdfText.match(/CFOP\s*([0-9]{4})/i);
+            data.cfop = cfopLinha ? cfopLinha[1] : (cfopMatches ? cfopMatches[0] : 'N/A');
+
+            return data;
+        };
+
+        extractedData = extractData(text);
+        console.log(`Dados extraídos do arquivo ${file.originalname}:`, extractedData.numeroNF, extractedData.cnpjEmitente);
+        
+        return { file, extractedData, text, filePath };
+    } catch (error) {
+        console.error(`Erro ao processar arquivo ${file.originalname}:`, error);
+        throw error;
+    }
+}
+
+// Função para processar arquivos em lotes
+async function processBatch(files, uploadDir, processedPdfsDir, clientesData, batchSize, batchInterval) {
+    const results = [];
+    const totalFiles = files.length;
+    
+    // Processar arquivos em lotes para evitar sobrecarga de memória
+    for (let i = 0; i < totalFiles; i += batchSize) {
+        const batch = files.slice(i, i + batchSize);
+        console.log(`Processando lote ${Math.floor(i/batchSize) + 1}/${Math.ceil(totalFiles/batchSize)} (${batch.length} arquivos)`);
+        
+        // Processar cada arquivo do lote em paralelo, mas limitado pelo maxConcurrentFiles
+        const batchPromises = batch.map(file => {
+            return new Promise(async (resolve) => {
+                try {
+                    const result = await processFile(file, uploadDir, processedPdfsDir, clientesData);
+                    resolve({
+                        file: file,
+                        success: true,
+                        result: result
+                    });
+                } catch (error) {
+                    console.error(`Erro ao processar ${file.originalname}:`, error.message);
+                    resolve({
+                        file: file,
+                        success: false,
+                        error: error.message
+                    });
+                    
+                    // Remover arquivo temporário em caso de erro
+                    try {
+                        const filePath = path.join(uploadDir, file.filename);
+                        if (fs.existsSync(filePath)) {
+                            fs.unlinkSync(filePath);
+                            console.log(`Arquivo temporário removido após erro: ${filePath}`);
+                        }
+                    } catch (unlinkError) {
+                        console.error(`Erro ao remover arquivo temporário: ${unlinkError.message}`);
+                    }
+                }
+            });
+        });
+        
+        // Executar as promessas com limite de concorrência
+        const batchResults = [];
+        for (let j = 0; j < batchPromises.length; j += config.performance.maxConcurrentFiles) {
+            const concurrentBatch = batchPromises.slice(j, j + config.performance.maxConcurrentFiles);
+            const concurrentResults = await Promise.all(concurrentBatch);
+            batchResults.push(...concurrentResults);
+        }
+        
+        results.push(...batchResults);
+        
+        // Pausa entre lotes para evitar sobrecarga
+        if (i + batchSize < totalFiles && batchInterval > 0) {
+            console.log(`Pausa de ${batchInterval}ms entre lotes...`);
+            await new Promise(resolve => setTimeout(resolve, batchInterval));
+        }
+    }
+    
+    return results;
+}
+
 // Endpoint para upload e processamento de PDF
-app.post('/upload', upload.array('pdfs'), async (req, res) => {
+app.post('/upload', upload.array('files', config.upload.maxFiles), async (req, res) => {
     if (!req.files || req.files.length === 0) {
-        return res.status(400).json({ error: 'Nenhum arquivo PDF enviado.' });
+        return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
     }
 
+    console.log(`Recebidos ${req.files.length} arquivos para processamento`);
     const processedFiles = [];
+    
+    try {
+        // Processar arquivos em lotes
+        const batchResults = await processBatch(
+            req.files, 
+            uploadDir, 
+            processedPdfsDir, 
+            clientesData, 
+            config.performance.batchSize || 20, 
+            config.performance.batchInterval || 500
+        );
+        
+        // Processar resultados dos lotes
+        for (const result of batchResults) {
+            if (!result.success) {
+                processedFiles.push({
+                    originalName: result.file.originalname,
+                    status: 'Erro',
+                    message: result.error || 'Erro desconhecido'
+                });
+                continue;
+            }
+            
+            const { file, extractedData, text, filePath } = result.result;
+            
+            // Verificar se o arquivo é um PDF
+            if (!file.originalname.toLowerCase().endsWith('.pdf')) {
+                processedFiles.push({
+                    originalName: file.originalname,
+                    status: 'Ignorado',
+                    message: 'Não é um arquivo PDF'
+                });
+                
+                // Remover arquivo não-PDF
+                try {
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
+                } catch (unlinkError) {
+                    console.error(`Erro ao remover arquivo não-PDF: ${unlinkError.message}`);
+                }
+                continue;
+            }
 
-    for (const file of req.files) {
-        const filePath = path.join(uploadDir, file.filename);
-        console.log('Arquivo recebido:', filePath, fs.existsSync(filePath));
-        let extractedData = {};
-        try {
-            const dataBuffer = fs.readFileSync(filePath);
-            const pdf = await PDFParser(dataBuffer);
-            const text = pdf.text;
-
-            // Extração de dados melhorada usando configuração
+            // Completar a extração de dados que foi iniciada na função processFile
             const extractData = (pdfText) => {
                 const data = {};
 
@@ -134,7 +311,7 @@ app.post('/upload', upload.array('pdfs'), async (req, res) => {
                 if ((!data.razaoSocial || data.razaoSocial === '') && data.cnpjEmitente && data.cnpjEmitente !== 'N/A') {
                     const cliente = clientesData.find(c =>
                         typeof c['CNPJ Emitente'] === 'string' &&
-                        c['CNPJ Emitente'].replace(/[^0-9-]/g, '') === extractedData.cnpjEmitente.replace(/[^0-9-]/g, '')
+                        c['CNPJ Emitente'].replace(/[^0-9-]/g, '') === data.cnpjEmitente.replace(/[^0-9-]/g, '')
                     );
                     if (cliente) {
                         data.razaoSocial = cliente['Nome Fantasia'] || '';
@@ -200,7 +377,7 @@ app.post('/upload', upload.array('pdfs'), async (req, res) => {
 
             // Validação de CFOP ou Natureza da Operação usando configuração
             const cfopLimpo = String(extractedData.cfop).replace(/[^0-9]/g, '');
-            const isCfopValido = config.cfopValidos.includes(cfopLimpo);
+            const isCfopValido = config.validCFOPs ? config.validCFOPs.includes(cfopLimpo) : config.cfopValidos.includes(cfopLimpo);
             const naturezaLimpa = normalizeText(extractedData.naturezaOperacao);
             const isDevolucao = naturezaLimpa.startsWith('DEV');
 
@@ -208,99 +385,150 @@ app.post('/upload', upload.array('pdfs'), async (req, res) => {
                 processedFiles.push({
                     originalName: file.originalname,
                     status: 'Ignorado',
-                    reason: 'CFOP ou Natureza da Operação inválidos.',
+                    message: `CFOP inválido: ${extractedData.cfop} ou Natureza da Operação inválida`,
                 });
+                try {
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
+                } catch (unlinkError) {
+                    console.error(`Erro ao remover arquivo com CFOP inválido: ${unlinkError.message}`);
+                }
                 continue; // Pula para o próximo arquivo, não copia
             }
 
-            // Lógica de renomeação
-            let nomeFantasia = '';
-            let nomeVendedor = '';
-            if (extractedData.cnpjEmitente !== 'N/A') {
-                const normalizeCnpj = cnpj => cnpj.replace(/[^0-9-]/g, '');
-                // Busca na base CSV (campos normalizados)
-                let cliente = clientesData.find(c =>
-                    typeof c['cnpjemitente'] === 'string' &&
-                    normalizeCnpj(c['cnpjemitente']) === normalizeCnpj(extractedData.cnpjEmitente)
-                );
-                if (cliente) {
-                    console.log('Cliente encontrado:', cliente);
-                    nomeFantasia = (cliente['nomefantasia'] || cliente['Nome Fantasia'] || '').trim();
-                    nomeVendedor = (cliente['nomevendedor'] || cliente['Nome Vendedor'] || '').trim();
-                } else {
-                    // Busca na base XLSX (campos originais)
-                    cliente = clientesData.find(c =>
-                        typeof c['CNPJ Emitente'] === 'string' &&
-                        normalizeCnpj(c['CNPJ Emitente']) === normalizeCnpj(extractedData.cnpjEmitente)
+            try {
+                // Lógica de renomeação
+                let nomeFantasia = '';
+                let nomeVendedor = '';
+                if (extractedData.cnpjEmitente !== 'N/A') {
+                    const normalizeCnpj = cnpj => cnpj.replace(/[^0-9-]/g, '');
+                    // Busca na base CSV (campos normalizados)
+                    let cliente = clientesData.find(c =>
+                        typeof c['cnpjemitente'] === 'string' &&
+                        normalizeCnpj(c['cnpjemitente']) === normalizeCnpj(extractedData.cnpjEmitente)
                     );
                     if (cliente) {
-                        nomeFantasia = (cliente['Nome Fantasia'] || '').trim();
-                        nomeVendedor = (cliente['Nome Vendedor'] || '').trim();
+                        console.log('Cliente encontrado:', cliente);
+                        nomeFantasia = (cliente['nomefantasia'] || cliente['Nome Fantasia'] || '').trim();
+                        nomeVendedor = (cliente['nomevendedor'] || cliente['Nome Vendedor'] || '').trim();
+                    } else {
+                        // Busca na base XLSX (campos originais)
+                        cliente = clientesData.find(c =>
+                            typeof c['CNPJ Emitente'] === 'string' &&
+                            normalizeCnpj(c['CNPJ Emitente']) === normalizeCnpj(extractedData.cnpjEmitente)
+                        );
+                        if (cliente) {
+                            nomeFantasia = (cliente['Nome Fantasia'] || '').trim();
+                            nomeVendedor = (cliente['Nome Vendedor'] || '').trim();
+                        }
                     }
                 }
-            }
 
-            let novoNome = `NFD ${extractedData.numeroNF} - `;
+                let novoNome = `NFD ${extractedData.numeroNF} - `;
 
-            if (nomeFantasia) {
-                novoNome += `${nomeFantasia}`;
-                if (nomeVendedor) {
-                    novoNome += ` - ${nomeVendedor}`;
+                if (nomeFantasia) {
+                    novoNome += `${nomeFantasia}`;
+                    if (nomeVendedor) {
+                        novoNome += ` - ${nomeVendedor}`;
+                    }
+                    novoNome += ' - ';
+                } else {
+                    novoNome += `${extractedData.razaoSocial} - `;
                 }
-                novoNome += ' - ';
-            } else {
-                novoNome += `${extractedData.razaoSocial} - `;
-            }
 
-            // Substituir barras na data por hífens ou outro caractere válido
-            const dataFormatada = extractedData.dataEmissao.replace(/\//g, '-');
-            novoNome += `${dataFormatada} - R$ ${extractedData.valorTotal}`;
+                // Substituir barras na data por hífens ou outro caractere válido
+                const dataFormatada = extractedData.dataEmissao.replace(/\//g, '-');
+                novoNome += `${dataFormatada} - R$ ${extractedData.valorTotal}`;
 
-            if (extractedData.numeroAdicional && extractedData.motivoAdicional) {
-                novoNome += ` - REF. ${extractedData.numeroAdicional} - MOT. ${extractedData.motivoAdicional}`;
-            }
+                if (extractedData.numeroAdicional && extractedData.motivoAdicional) {
+                    novoNome += ` - REF. ${extractedData.numeroAdicional} - MOT. ${extractedData.motivoAdicional}`;
+                }
 
-            novoNome += '.pdf'; // Adiciona a extensão do arquivo
+                // Remover caracteres inválidos para nome de arquivo
+                novoNome = novoNome.replace(/[\/:*?"<>|]/g, '_');
+                novoNome += '.pdf'; // Adiciona a extensão do arquivo
 
-            // Salvar o arquivo com o novo nome
-            const newFilePath = path.join(processedPdfsDir, novoNome);
-            if (fs.existsSync(filePath)) {
-                fs.copyFileSync(filePath, newFilePath);
-            } else {
-                console.warn('Arquivo temporário não encontrado para copiar:', filePath);
-            }
-
-            processedFiles.push({
-                originalName: file.originalname,
-                extractedData: extractedData,
-                novoNome: novoNome,
-                status: 'Processado',
-                downloadPath: `/download/${encodeURIComponent(novoNome)}`
-            });
-
-        } catch (error) {
-            console.error('Erro ao processar PDF:', error, {
-                file: file.originalname,
-                extractedData
-            });
-            processedFiles.push({
-                originalName: file.originalname,
-                status: 'Erro',
-                reason: 'Erro ao processar o arquivo PDF.',
-            });
-        } finally {
-            // Remover o arquivo temporário após o processamento
-            try {
+                // Salvar o arquivo com o novo nome
+                const newFilePath = path.join(processedPdfsDir, novoNome);
                 if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
+                    fs.copyFileSync(filePath, newFilePath);
+                } else {
+                    console.warn('Arquivo temporário não encontrado para copiar:', filePath);
+                    throw new Error('Arquivo temporário não encontrado');
                 }
-            } catch (err) {
-                console.error('Erro ao remover arquivo temporário:', err);
+
+                processedFiles.push({
+                    originalName: file.originalname,
+                    extractedData: extractedData,
+                    novoNome: novoNome,
+                    status: 'Processado',
+                    downloadPath: `/download/${encodeURIComponent(novoNome)}`
+                });
+
+                // Remover o arquivo temporário após o processamento
+                try {
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
+                } catch (err) {
+                    console.error('Erro ao remover arquivo temporário:', err);
+                }
+            } catch (processingError) {
+                console.error(`Erro ao processar arquivo ${file.originalname}:`, processingError);
+                processedFiles.push({
+                    originalName: file.originalname,
+                    status: 'Erro',
+                    message: `Erro ao processar: ${processingError.message}`
+                });
+                
+                // Remover o arquivo temporário em caso de erro
+                try {
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
+                } catch (unlinkError) {
+                    console.error(`Erro ao remover arquivo temporário: ${unlinkError.message}`);
+                }
             }
         }
+    } catch (error) {
+        console.error('Erro geral no processamento de arquivos:', error);
+        
+        // Tentar limpar arquivos temporários em caso de erro
+        try {
+            const files = fs.readdirSync(uploadDir);
+            for (const file of files) {
+                try {
+                    fs.unlinkSync(path.join(uploadDir, file));
+                } catch (unlinkError) {
+                    console.error(`Erro ao remover arquivo temporário ${file}:`, unlinkError);
+                }
+            }
+        } catch (cleanupError) {
+            console.error('Erro ao limpar diretório temporário:', cleanupError);
+        }
+        
+        return res.status(500).json({ 
+            error: 'Erro ao processar arquivos', 
+            message: error.message,
+            files: processedFiles
+        });
     }
 
-    res.json({ message: 'Arquivos processados com sucesso!', files: processedFiles });
+    // Adicionar informações de estatísticas ao resultado
+    const stats = {
+        total: req.files.length,
+        processados: processedFiles.filter(f => f.status === 'Processado').length,
+        ignorados: processedFiles.filter(f => f.status === 'Ignorado').length,
+        erros: processedFiles.filter(f => f.status === 'Erro').length
+    };
+
+    res.json({ 
+        message: `Arquivos processados com sucesso! (${stats.processados}/${stats.total})`, 
+        files: processedFiles,
+        stats: stats
+    });
 });
 
 // Endpoint para download de arquivos processados

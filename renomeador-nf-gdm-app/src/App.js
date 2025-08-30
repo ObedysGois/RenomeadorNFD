@@ -9,6 +9,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [savedFiles, setSavedFiles] = useState([]);
   const [showDetails, setShowDetails] = useState({});
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [stats, setStats] = useState(null);
 
   // Carregar arquivos salvos ao iniciar
   useEffect(() => {
@@ -27,32 +29,46 @@ function App() {
 
   const onDrop = useCallback(async (acceptedFiles) => {
     setLoading(true);
-    setMessage('Processando arquivos...');
+    setMessage(`Preparando ${acceptedFiles.length} arquivos para processamento...`);
+    setUploadProgress(0);
+    setStats(null);
+    
     const formData = new FormData();
     acceptedFiles.forEach(file => {
-      formData.append('pdfs', file);
+      formData.append('files', file);
     });
 
     try {
-      // Substitua as URLs hardcoded por:
       const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
-      // Fazer upload dos arquivos
+      // Fazer upload dos arquivos com monitoramento de progresso
       const response = await axios.post(`${API_URL}/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percentCompleted);
+          setMessage(`Enviando arquivos: ${percentCompleted}% concluído...`);
+        }
       });
+      
       setProcessedFiles(response.data.files);
       setMessage(response.data.message);
+      
+      // Armazenar estatísticas de processamento
+      if (response.data.stats) {
+        setStats(response.data.stats);
+      }
       
       // Recarregar lista de arquivos salvos
       await loadSavedFiles();
     } catch (error) {
       console.error('Erro ao fazer upload:', error);
-      setMessage('Erro ao processar os arquivos.');
+      setMessage(error.response?.data?.error || 'Erro ao processar os arquivos.');
     } finally {
       setLoading(false);
+      setUploadProgress(0);
     }
   }, []);
 
@@ -115,13 +131,43 @@ function App() {
         {loading && (
           <div className="loading">
             <div className="spinner"></div>
-            <p>Processando arquivos...</p>
+            <p>{message}</p>
+            {uploadProgress > 0 && (
+              <div className="progress-bar-container">
+                <div className="progress-bar" style={{ width: `${uploadProgress}%` }}></div>
+                <span className="progress-text">{uploadProgress}%</span>
+              </div>
+            )}
           </div>
         )}
 
-        {message && (
+        {message && !loading && (
           <div className={`message ${message.includes('Erro') ? 'error' : 'success'}`}>
             {message}
+          </div>
+        )}
+        
+        {stats && (
+          <div className="stats-container">
+            <h3>Estatísticas de Processamento</h3>
+            <div className="stats-grid">
+              <div className="stat-item">
+                <span className="stat-label">Total:</span>
+                <span className="stat-value">{stats.total}</span>
+              </div>
+              <div className="stat-item success">
+                <span className="stat-label">Processados:</span>
+                <span className="stat-value">{stats.processados}</span>
+              </div>
+              <div className="stat-item warning">
+                <span className="stat-label">Ignorados:</span>
+                <span className="stat-value">{stats.ignorados}</span>
+              </div>
+              <div className="stat-item error">
+                <span className="stat-label">Erros:</span>
+                <span className="stat-value">{stats.erros}</span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -176,7 +222,7 @@ function App() {
                           )}
                         </div>
                       ) : (
-                        <p className="reason">{file.reason}</p>
+                        <p className="reason">{file.message || file.reason || 'Erro desconhecido'}</p>
                       )}
                     </div>
                   )}
