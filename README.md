@@ -1,10 +1,81 @@
-# Getting Started with Create React App
+# Renomeador de NF - GDM
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Aplicativo para renomear notas fiscais automaticamente com base em dados de clientes.
 
-## Available Scripts
+## Estrutura do Projeto
 
-In the project directory, you can run:
+- `server/`: Backend Node.js com Express
+- `renomeador-nf-gdm-app/`: Frontend React (bootstrapped with [Create React App](https://github.com/facebook/create-react-app))
+- `render.yaml`: Configuração para deploy no Render
+
+## Configuração do Git
+
+### Clonar o repositório
+
+```bash
+git clone https://github.com/ObedysGois/RenomeadorNFD.git
+cd RenomeadorNFD
+```
+
+### Configurar o repositório remoto
+
+Se você já tem um projeto existente e deseja conectá-lo ao repositório:
+
+```bash
+git remote set-url origin https://github.com/ObedysGois/RenomeadorNFD.git
+```
+
+### Enviar alterações para o repositório
+
+```bash
+git add .
+git commit -m "Sua mensagem de commit"
+git push origin main
+```
+
+## Deploy no Render
+
+O projeto está configurado para ser hospedado no Render usando o arquivo `render.yaml`.
+
+### Passos para o Deploy
+
+1. Crie uma conta no [Render](https://render.com/)
+2. Conecte sua conta do GitHub ao Render
+3. No dashboard do Render, clique em "New" e selecione "Blueprint"
+4. Selecione o repositório `RenomeadorNFD`
+5. O Render detectará automaticamente o arquivo `render.yaml` e criará os serviços configurados:
+   - `renomeador-nf-gdm-frontend`: Frontend estático React
+   - `renomeador-nf-gdm-backend`: Backend Node.js
+
+### Configuração dos Serviços
+
+#### Frontend
+- **Tipo**: Web Service (Static)
+- **Diretório de publicação**: renomeador-nf-gdm-app/build
+- **Variáveis de ambiente**:
+  - `NODE_VERSION`: 18.0.0
+  - `API_URL`: URL do backend (configurada automaticamente)
+
+#### Backend
+- **Tipo**: Web Service (Node)
+- **Comando de build**: npm install
+- **Comando de start**: cd server && node index.js
+- **Variáveis de ambiente**:
+  - `NODE_VERSION`: 18.0.0
+  - `PORT`: 5000
+  - `FRONTEND_URL`: URL do frontend (configurada automaticamente)
+
+### Verificação do Deploy
+
+Após o deploy, você poderá acessar:
+- Frontend: https://renomeador-nf-gdm-frontend.onrender.com
+- Backend: https://renomeador-nf-gdm-backend.onrender.com
+
+## Desenvolvimento Local
+
+### Scripts Disponíveis
+
+No diretório do projeto, você pode executar:
 
 ### `npm start`
 

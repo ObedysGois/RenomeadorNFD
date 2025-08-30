@@ -3,14 +3,15 @@
 module.exports = {
   // Configurações do servidor
   server: {
-    port: 5000,
-    host: 'localhost'
+    port: process.env.PORT || 5000,
+    host: process.env.HOST || 'localhost'
   },
 
   // Configurações do frontend
   frontend: {
-    port: 3000,
-    host: 'localhost'
+    url: process.env.FRONTEND_URL || 'http://localhost:3000',
+    port: process.env.FRONTEND_PORT || 3000,
+    host: process.env.FRONTEND_HOST || 'localhost'
   },
 
   // CFOPs válidos para processamento
@@ -105,7 +106,15 @@ module.exports = {
     
     // CORS
     cors: {
-      origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+      origin: function(origin, callback) {
+        const allowedOrigins = [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://127.0.0.1:3000'];
+        // Permitir requisições sem origin (como mobile apps ou curl)
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          callback(new Error('Não permitido por CORS'));
+        }
+      },
       credentials: true
     }
   },
@@ -118,4 +127,4 @@ module.exports = {
     // Número máximo de arquivos processados simultaneamente
     maxConcurrentFiles: 5
   }
-}; 
+};
