@@ -83,8 +83,44 @@ const uploadDir = path.join(__dirname, config.files.uploadDir);
 const processedPdfsDir = path.join(__dirname, config.files.processedDir);
 
 // Garante que os diretórios existam
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-if (!fs.existsSync(processedPdfsDir)) fs.mkdirSync(processedPdfsDir);
+if (!fs.existsSync(uploadDir)) {
+    console.log(`Criando diretório de upload: ${uploadDir}`);
+    try {
+        fs.mkdirSync(uploadDir, { recursive: true });
+        console.log(`Diretório de upload criado com sucesso: ${uploadDir}`);
+    } catch (err) {
+        console.error(`Erro ao criar diretório de upload: ${err.message}`);
+    }
+}
+
+if (!fs.existsSync(processedPdfsDir)) {
+    console.log(`Criando diretório de PDFs processados: ${processedPdfsDir}`);
+    try {
+        fs.mkdirSync(processedPdfsDir, { recursive: true });
+        console.log(`Diretório de PDFs processados criado com sucesso: ${processedPdfsDir}`);
+    } catch (err) {
+        console.error(`Erro ao criar diretório de PDFs processados: ${err.message}`);
+    }
+}
+
+// Verifica permissões de escrita
+try {
+    const testFilePath = path.join(uploadDir, 'test-write-permission.txt');
+    fs.writeFileSync(testFilePath, 'test');
+    fs.unlinkSync(testFilePath);
+    console.log(`Permissão de escrita verificada com sucesso no diretório de upload: ${uploadDir}`);
+} catch (err) {
+    console.error(`Erro de permissão no diretório de upload: ${err.message}`);
+}
+
+try {
+    const testFilePath = path.join(processedPdfsDir, 'test-write-permission.txt');
+    fs.writeFileSync(testFilePath, 'test');
+    fs.unlinkSync(testFilePath);
+    console.log(`Permissão de escrita verificada com sucesso no diretório de PDFs processados: ${processedPdfsDir}`);
+} catch (err) {
+    console.error(`Erro de permissão no diretório de PDFs processados: ${err.message}`);
+}
 
 // Configurar multer com validações
 const upload = multer({
