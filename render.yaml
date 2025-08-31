@@ -17,7 +17,7 @@ services:
     name: renomeador-nf-gdm-backend
     env: node
     buildCommand: npm install
-    startCommand: cd server && node index.js
+    startCommand: cd server && mkdir -p uploads processed_pdfs && chmod -R 777 uploads processed_pdfs && node index.js
     envVars:
       - key: NODE_VERSION
         value: 18.19.1
@@ -25,3 +25,5 @@ services:
         value: 5000
       - key: FRONTEND_URL
         value: https://renomeador-nf-gdm-frontend.onrender.com
+      - key: NODE_ENV
+        value: production
