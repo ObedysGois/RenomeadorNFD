@@ -599,17 +599,35 @@ app.get('/download/:filename', (req, res) => {
 
 // Endpoint para listar arquivos processados
 app.get('/files', (req, res) => {
+    console.log('Requisição recebida no endpoint /files');
+    console.log('Headers:', req.headers);
+    console.log('Origin:', req.headers.origin);
+    
     try {
+        console.log('Verificando diretório:', processedPdfsDir);
+        if (!fs.existsSync(processedPdfsDir)) {
+            console.log('Diretório não existe, tentando criar:', processedPdfsDir);
+            fs.mkdirSync(processedPdfsDir, { recursive: true });
+        }
+        
         const files = fs.readdirSync(processedPdfsDir);
-        const fileList = files.map(filename => ({
-            name: filename,
-            path: `/download/${encodeURIComponent(filename)}`,
-            size: fs.statSync(path.join(processedPdfsDir, filename)).size
-        }));
+        console.log('Arquivos encontrados:', files.length);
+        
+        const fileList = files.map(filename => {
+            const filePath = path.join(processedPdfsDir, filename);
+            const stats = fs.statSync(filePath);
+            return {
+                name: filename,
+                path: `/download/${encodeURIComponent(filename)}`,
+                size: stats.size
+            };
+        });
+        
+        console.log('Enviando resposta com', fileList.length, 'arquivos');
         res.json(fileList);
     } catch (error) {
         console.error('Erro ao listar arquivos:', error);
-        res.status(500).json({ error: 'Erro ao listar arquivos' });
+        res.status(500).json({ error: 'Erro ao listar arquivos', message: error.message });
     }
 });
 
