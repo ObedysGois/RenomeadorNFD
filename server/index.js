@@ -311,7 +311,7 @@ async function processBatch(files, uploadDir, processedPdfsDir, clientesData, ba
 // Endpoint para upload e processamento de PDF
 app.post('/upload', upload.array('files', config.validation.maxFiles), async (req, res) => {
     console.log('Requisição recebida no endpoint /upload');
-    console.log('Headers:', req.headers);
+    console.log('Headers:', JSON.stringify(req.headers));
     console.log('Origin:', req.headers.origin);
     console.log('Files recebidos:', req.files ? req.files.length : 0);
     
@@ -326,14 +326,54 @@ app.post('/upload', upload.array('files', config.validation.maxFiles), async (re
     try {
         // Verificar diretórios antes de processar
         console.log('Verificando diretórios antes de processar...');
+        console.log('uploadDir:', uploadDir, 'existe:', fs.existsSync(uploadDir));
+        console.log('processedPdfsDir:', processedPdfsDir, 'existe:', fs.existsSync(processedPdfsDir));
+        
         if (!fs.existsSync(uploadDir)) {
             console.log(`Diretório de upload não existe, criando: ${uploadDir}`);
-            fs.mkdirSync(uploadDir, { recursive: true });
+            try {
+                fs.mkdirSync(uploadDir, { recursive: true });
+                console.log(`Diretório de upload criado: ${uploadDir}, existe agora:`, fs.existsSync(uploadDir));
+            } catch (err) {
+                console.error(`ERRO ao criar diretório de upload: ${err.message}`);
+                console.error(`Stack trace do erro:`, err.stack);
+                return res.status(500).json({ error: 'Erro ao criar diretório de upload', message: err.message });
+            }
         }
         
         if (!fs.existsSync(processedPdfsDir)) {
             console.log(`Diretório de PDFs processados não existe, criando: ${processedPdfsDir}`);
-            fs.mkdirSync(processedPdfsDir, { recursive: true });
+            try {
+                fs.mkdirSync(processedPdfsDir, { recursive: true });
+                console.log(`Diretório de PDFs processados criado: ${processedPdfsDir}, existe agora:`, fs.existsSync(processedPdfsDir));
+            } catch (err) {
+                console.error(`ERRO ao criar diretório de PDFs processados: ${err.message}`);
+                console.error(`Stack trace do erro:`, err.stack);
+                return res.status(500).json({ error: 'Erro ao criar diretório de PDFs processados', message: err.message });
+            }
+        }
+        
+        // Testar permissões de escrita em ambos os diretórios
+        try {
+            const testUploadPath = path.join(uploadDir, 'test-write-permission-' + Date.now() + '.txt');
+            fs.writeFileSync(testUploadPath, 'test');
+            fs.unlinkSync(testUploadPath);
+            console.log(`Permissão de escrita verificada com sucesso no diretório de upload: ${uploadDir}`);
+        } catch (err) {
+            console.error(`ERRO DE PERMISSÃO no diretório de upload: ${err.message}`);
+            console.error(`Stack trace do erro de permissão:`, err.stack);
+            return res.status(500).json({ error: 'Erro de permissão no diretório de upload', message: err.message });
+        }
+        
+        try {
+            const testProcessedPath = path.join(processedPdfsDir, 'test-write-permission-' + Date.now() + '.txt');
+            fs.writeFileSync(testProcessedPath, 'test');
+            fs.unlinkSync(testProcessedPath);
+            console.log(`Permissão de escrita verificada com sucesso no diretório de PDFs processados: ${processedPdfsDir}`);
+        } catch (err) {
+            console.error(`ERRO DE PERMISSÃO no diretório de PDFs processados: ${err.message}`);
+            console.error(`Stack trace do erro de permissão:`, err.stack);
+            return res.status(500).json({ error: 'Erro de permissão no diretório de PDFs processados', message: err.message });
         }
         
         // Processar arquivos em lotes
