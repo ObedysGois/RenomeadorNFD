@@ -296,7 +296,13 @@ async function processBatch(files, uploadDir, processedPdfsDir, clientesData, ba
 
 // Endpoint para upload e processamento de PDF
 app.post('/upload', upload.array('files', config.validation.maxFiles), async (req, res) => {
+    console.log('Requisição recebida no endpoint /upload');
+    console.log('Headers:', req.headers);
+    console.log('Origin:', req.headers.origin);
+    console.log('Files recebidos:', req.files ? req.files.length : 0);
+    
     if (!req.files || req.files.length === 0) {
+        console.log('Erro: Nenhum arquivo foi enviado');
         return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
     }
 
@@ -304,7 +310,20 @@ app.post('/upload', upload.array('files', config.validation.maxFiles), async (re
     const processedFiles = [];
     
     try {
+        // Verificar diretórios antes de processar
+        console.log('Verificando diretórios antes de processar...');
+        if (!fs.existsSync(uploadDir)) {
+            console.log(`Diretório de upload não existe, criando: ${uploadDir}`);
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        
+        if (!fs.existsSync(processedPdfsDir)) {
+            console.log(`Diretório de PDFs processados não existe, criando: ${processedPdfsDir}`);
+            fs.mkdirSync(processedPdfsDir, { recursive: true });
+        }
+        
         // Processar arquivos em lotes
+        console.log('Iniciando processamento em lotes...');
         const batchResults = await processBatch(
             req.files, 
             uploadDir, 
