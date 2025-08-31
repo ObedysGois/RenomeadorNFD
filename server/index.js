@@ -69,7 +69,19 @@ loadClientesData();
 
 // Configurar CORS
 app.use(cors(config.security.cors));
-app.use(express.json());
+
+// Aumentar limite de tamanho do corpo da requisição
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Configurar timeout da requisição
+app.use((req, res, next) => {
+    res.setTimeout(300000, () => {
+        console.log('Timeout da requisição atingido');
+        res.status(408).send('Timeout da requisição');
+    });
+    next();
+});
 
 // Configurar headers de segurança
 Object.entries(config.security.headers).forEach(([key, value]) => {
@@ -143,9 +155,24 @@ const upload = multer({
         destination: function (req, file, cb) {
             // Verificar diretório antes de salvar
             try {
+                console.log(`Verificando diretório de upload para o arquivo ${file.originalname}...`);
                 ensureDirectoryExists(uploadDir);
+                
+                // Verificar permissões de escrita explicitamente
+                const testFilePath = path.join(uploadDir, `test-write-${Date.now()}.txt`);
+                try {
+                    fs.writeFileSync(testFilePath, 'test');
+                    fs.unlinkSync(testFilePath);
+                    console.log(`Permissões de escrita verificadas para ${uploadDir}`);
+                } catch (writeError) {
+                    console.error(`Erro de permissão ao escrever no diretório ${uploadDir}:`, writeError);
+                    throw new Error(`Sem permissão de escrita no diretório de upload: ${writeError.message}`);
+                }
+                
                 cb(null, uploadDir);
             } catch (error) {
+                console.error(`Erro crítico no diretório de upload:`, error);
+                console.error(`Stack trace:`, error.stack);
                 cb(new Error(`Erro no diretório de upload: ${error.message}`));
             }
         },
@@ -191,12 +218,32 @@ async function processFile(file, uploadDir, processedPdfsDir, clientesData) {
     console.log('Processando arquivo:', filePath, fs.existsSync(filePath));
     let extractedData = {};
     try {
-        const dataBuffer = fs.readFileSync(filePath);
+        // Verificar se o arquivo existe antes de tentar processá-lo
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`Arquivo não encontrado: ${filePath}`);
+        }
+        
+        // Verificar tamanho do arquivo
+        const stats = fs.statSync(filePath);
+        console.log(`Tamanho do arquivo ${file.originalname}: ${stats.size} bytes`);
+        
+        // Ler o arquivo com tratamento de erro
+        let dataBuffer;
+        try {
+            dataBuffer = fs.readFileSync(filePath);
+        } catch (readError) {
+            console.error(`Erro ao ler arquivo ${file.originalname}:`, readError);
+            throw new Error(`Erro ao ler arquivo: ${readError.message}`);
+        }
+        
+        // Processar o PDF com timeout aumentado
+        console.log(`Iniciando processamento do PDF ${file.originalname} com timeout de ${config.performance.pdfTimeout}ms`);
         const pdf = await PDFParser(dataBuffer, {
             // Definir um timeout para evitar que arquivos problemáticos travem o processamento
             timeout: config.performance.pdfTimeout
         });
         const text = pdf.text;
+        console.log(`PDF processado com sucesso: ${file.originalname}`);
         
         // Extração de dados do PDF
         const extractData = (pdfText) => {
@@ -332,18 +379,26 @@ app.post('/upload', async (req, res, next) => {
     console.log('Requisição recebida no endpoint /upload');
     console.log('Headers:', JSON.stringify(req.headers));
     console.log('Origin:', req.headers.origin);
+    console.log('Content-Type:', req.headers['content-type']);
+    console.log('Content-Length:', req.headers['content-length']);
     
     try {
         // Verificar diretórios antes de processar
+        console.log('Verificando diretórios de upload e processamento...');
         ensureDirectoryExists(uploadDir);
         ensureDirectoryExists(processedPdfsDir);
+        console.log('Diretórios verificados com sucesso.');
         
         // Processar upload com multer
+        console.log('Iniciando processamento de upload com multer...');
         upload.array('files', config.validation.maxFiles)(req, res, async function(err) {
             if (err) {
                 console.error('Erro no upload:', err.message);
-                return res.status(400).json({ error: err.message });
+                console.error('Stack trace:', err.stack);
+                return res.status(400).json({ error: err.message, stack: err.stack });
             }
+            
+            console.log('Upload processado pelo multer com sucesso.');
             
             if (!req.files || req.files.length === 0) {
                 console.log('Erro: Nenhum arquivo foi enviado');
@@ -783,10 +838,13 @@ const PORT = process.env.PORT || 5000;
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'renomeadordev.netlify.app',
+    'https://renomeadordev.netlify.app',
+    'https://renomeador-nf-gdm-frontend.onrender.com',
     'https://renomeador-nf-gdm-frontend-4all.onrender.com'
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // No final, substitua:

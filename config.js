@@ -130,15 +130,15 @@ module.exports = {
   // Configurações de performance
   performance: {
     // Timeout para processamento de PDF (em ms)
-    pdfTimeout: 60000, // Aumentado para 60 segundos para arquivos maiores
+    pdfTimeout: 120000, // Aumentado para 120 segundos para arquivos maiores e ambiente de produção
     
     // Número máximo de arquivos processados simultaneamente
-    maxConcurrentFiles: 10, // Aumentado para processar mais arquivos em paralelo
+    maxConcurrentFiles: 5, // Reduzido para evitar sobrecarga no servidor Render
     
     // Tamanho do lote para processamento em batch
-    batchSize: 20, // Processar em lotes de 20 arquivos
+    batchSize: 10, // Reduzido para lotes menores e mais gerenciáveis
     
     // Intervalo entre lotes (ms)
-    batchInterval: 500 // Pequena pausa entre lotes para liberar recursos
+    batchInterval: 1000 // Aumentado para dar mais tempo entre lotes
   }
 };
