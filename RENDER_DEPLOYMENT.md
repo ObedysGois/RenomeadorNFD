@@ -2,7 +2,13 @@
 
 ## Modificações Realizadas
 
-### 1. Permissões de Diretórios
+### 1. Correção de Erro JavaScript
+
+- Corrigido erro `Assignment to constant variable` no arquivo `server/index.js`:
+  - Alteradas as atribuições de `extractedData` para usar `let` em vez de constantes implícitas nas linhas 258 e 475
+  - Este erro estava causando falha 500 no endpoint `/upload`
+
+### 2. Permissões de Diretórios
 
 Foram feitas as seguintes alterações para resolver problemas de permissão no ambiente Render:
 

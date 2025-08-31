@@ -255,7 +255,7 @@ async function processFile(file, uploadDir, processedPdfsDir, clientesData) {
             return data;
         };
 
-        extractedData = extractData(text);
+        let extractedData = extractData(text);
         console.log(`Dados extraídos do arquivo ${file.originalname}:`, extractedData.numeroNF, extractedData.cnpjEmitente);
         
         return { file, extractedData, text, filePath };
@@ -472,7 +472,7 @@ app.post('/upload', async (req, res, next) => {
                         return data;
                     };
 
-                    extractedData = extractData(text);
+                    let extractedData = extractData(text);
                     console.log('EXTRAÍDO DO PDF:', extractedData);
 
                     // Validação de CFOP ou Natureza da Operação usando configuração
