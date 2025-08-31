@@ -5,7 +5,7 @@ services:
     staticPublishPath: renomeador-nf-gdm-app/build
     envVars:
       - key: NODE_VERSION
-        value: 18.0.0
+        value: 18.19.1
       - key: API_URL
         value: https://renomeador-nf-gdm-backend.onrender.com
     routes:
@@ -20,7 +20,7 @@ services:
     startCommand: cd server && node index.js
     envVars:
       - key: NODE_VERSION
-        value: 18.0.0
+        value: 18.19.1
       - key: PORT
         value: 5000
       - key: FRONTEND_URL
