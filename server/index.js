@@ -246,7 +246,7 @@ async function processBatch(files, uploadDir, processedPdfsDir, clientesData, ba
 }
 
 // Endpoint para upload e processamento de PDF
-app.post('/upload', upload.array('files', config.upload.maxFiles), async (req, res) => {
+app.post('/upload', upload.array('files', config.validation.maxFiles), async (req, res) => {
     if (!req.files || req.files.length === 0) {
         return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
     }
