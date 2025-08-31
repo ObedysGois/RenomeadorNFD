@@ -527,7 +527,7 @@ app.post('/upload', async (req, res, next) => {
                         return data;
                     };
 
-                    extractedData = extractData(text);
+                    Object.assign(extractedData, extractData(text));
                     console.log('EXTRAÍDO DO PDF:', extractedData);
 
                     // Validação de CFOP ou Natureza da Operação usando configuração
