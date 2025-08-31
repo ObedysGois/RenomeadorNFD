@@ -472,7 +472,7 @@ app.post('/upload', async (req, res, next) => {
                         return data;
                     };
 
-                    let extractedData = extractData(text);
+                    extractedData = extractData(text);
                     console.log('EXTRAÍDO DO PDF:', extractedData);
 
                     // Validação de CFOP ou Natureza da Operação usando configuração

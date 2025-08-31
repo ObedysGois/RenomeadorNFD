@@ -4,9 +4,10 @@
 
 ### 1. Correção de Erro JavaScript
 
-- Corrigido erro `Assignment to constant variable` no arquivo `server/index.js`:
-  - Alteradas as atribuições de `extractedData` para usar `let` em vez de constantes implícitas nas linhas 258 e 475
-  - Este erro estava causando falha 500 no endpoint `/upload`
+- Corrigido erro `SyntaxError: Identifier 'extractedData' has already been declared` no arquivo `server/index.js`:
+  - Removida a redeclaração de `extractedData` com `let` na linha 475, mantendo apenas a atribuição
+  - A variável já havia sido declarada na linha 380 através de desestruturação
+  - Este erro estava causando falha na inicialização do servidor no Render
 
 ### 2. Permissões de Diretórios
 
