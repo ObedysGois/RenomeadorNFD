@@ -33,6 +33,18 @@
   z-index: 2;
 }
 
+.app-logo {
+  max-width: 200px;
+  height: auto;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .app-logo {
+    max-width: 150px;
+  }
+}
+
 /* Ajuste nas cores dos elementos para combinar com a identidade visual */
 .dropzone {
   width: 100%;

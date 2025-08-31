@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 import './App.css';
+import logo from './renomeador_devolucoes_logo.png';
 
 function App() {
   const [processedFiles, setProcessedFiles] = useState([]);
@@ -110,7 +111,8 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>🔄 Renomeador de Devoluções - GDM</h1>
+        <img src={logo} alt="Renomeador de Devoluções Logo" className="app-logo" />
+        <h1>Renomeador de Devoluções - GDM</h1>
         <p className="subtitle">Processe e renomeie suas notas fiscais automaticamente</p>
         
         <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`}>
