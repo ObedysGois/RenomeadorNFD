@@ -130,6 +130,20 @@ const upload = multer({
         files: config.validation.maxFiles
     },
     fileFilter: (req, file, cb) => {
+        console.log('Verificando arquivo:', file.originalname);
+        console.log('Diretório de upload:', uploadDir, 'existe:', fs.existsSync(uploadDir));
+        
+        try {
+            // Verificar permissões de escrita no diretório de upload
+            const testFilePath = path.join(uploadDir, 'test-write-permission-' + Date.now() + '.txt');
+            fs.writeFileSync(testFilePath, 'test');
+            fs.unlinkSync(testFilePath);
+            console.log(`Permissão de escrita verificada com sucesso no diretório de upload: ${uploadDir}`);
+        } catch (err) {
+            console.error(`ERRO DE PERMISSÃO no diretório de upload: ${err.message}`);
+            console.error(`Stack trace do erro de permissão:`, err.stack);
+        }
+        
         const ext = path.extname(file.originalname).toLowerCase();
         if (config.files.acceptedExtensions.includes(ext)) {
             cb(null, true);
