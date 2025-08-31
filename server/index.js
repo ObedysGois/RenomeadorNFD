@@ -673,18 +673,40 @@ app.get('/download/:filename', (req, res) => {
 // Endpoint para listar arquivos processados
 app.get('/files', (req, res) => {
     console.log('Requisição recebida no endpoint /files');
-    console.log('Headers:', req.headers);
+    console.log('Headers:', JSON.stringify(req.headers));
     console.log('Origin:', req.headers.origin);
     
     try {
         console.log('Verificando diretório:', processedPdfsDir);
+        console.log('Diretório existe?', fs.existsSync(processedPdfsDir));
+        
         if (!fs.existsSync(processedPdfsDir)) {
             console.log('Diretório não existe, tentando criar:', processedPdfsDir);
-            fs.mkdirSync(processedPdfsDir, { recursive: true });
+            try {
+                fs.mkdirSync(processedPdfsDir, { recursive: true });
+                console.log('Diretório criado com sucesso, existe agora?', fs.existsSync(processedPdfsDir));
+            } catch (mkdirErr) {
+                console.error('ERRO ao criar diretório:', mkdirErr.message);
+                console.error('Stack trace do erro:', mkdirErr.stack);
+                return res.status(500).json({ error: 'Erro ao criar diretório de PDFs processados', message: mkdirErr.message });
+            }
+        }
+        
+        // Testar permissões de escrita
+        try {
+            const testFilePath = path.join(processedPdfsDir, 'test-write-permission-' + Date.now() + '.txt');
+            fs.writeFileSync(testFilePath, 'test');
+            fs.unlinkSync(testFilePath);
+            console.log(`Permissão de escrita verificada com sucesso no diretório: ${processedPdfsDir}`);
+        } catch (permErr) {
+            console.error(`ERRO DE PERMISSÃO no diretório: ${permErr.message}`);
+            console.error(`Stack trace do erro de permissão:`, permErr.stack);
+            return res.status(500).json({ error: 'Erro de permissão no diretório de PDFs processados', message: permErr.message });
         }
         
         const files = fs.readdirSync(processedPdfsDir);
         console.log('Arquivos encontrados:', files.length);
+        console.log('Lista de arquivos:', files);
         
         const fileList = files.map(filename => {
             const filePath = path.join(processedPdfsDir, filename);
@@ -700,6 +722,7 @@ app.get('/files', (req, res) => {
         res.json(fileList);
     } catch (error) {
         console.error('Erro ao listar arquivos:', error);
+        console.error('Stack trace do erro:', error.stack);
         res.status(500).json({ error: 'Erro ao listar arquivos', message: error.message });
     }
 });
