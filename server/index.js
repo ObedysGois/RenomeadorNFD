@@ -13,21 +13,30 @@ const archiver = require('archiver');
 const app = express();
 const port = config.server.port;
 
-const CLIENTES_DATA_PATH = path.join(__dirname, config.files.clientesPath);
+// Caminhos absolutos para os arquivos de dados
+const CLIENTES_DATA_PATH = path.resolve(__dirname, '..', 'renomeador-nf-gdm-app', 'public', 'DADOSCLIENTES.xlsx');
+const CSV_PATH = path.resolve(__dirname, '..', 'renomeador-nf-gdm-app', 'public', 'DADOSCLIENTES.csv');
 
 // Carregar dados de clientes de XLSX e CSV
 let clientesData = [];
 const loadClientesData = () => {
     try {
-        // XLSX
-        const workbook = xlsx.readFile(CLIENTES_DATA_PATH);
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        clientesData = xlsx.utils.sheet_to_json(sheet);
-        // CSV
-        const csvPath = path.join(__dirname, '../renomeador-nf-gdm-app/public/DADOSCLIENTES.CSV');
-        if (fs.existsSync(csvPath)) {
-            const csvContent = fs.readFileSync(csvPath, 'utf8');
+        console.log('Tentando carregar dados de clientes de:', CLIENTES_DATA_PATH);
+        // Verificar se o arquivo XLSX existe
+        if (fs.existsSync(CLIENTES_DATA_PATH)) {
+            // XLSX
+            const workbook = xlsx.readFile(CLIENTES_DATA_PATH);
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            clientesData = xlsx.utils.sheet_to_json(sheet);
+            console.log(`Dados carregados do XLSX: ${clientesData.length} registros`);
+        } else {
+            console.warn('Arquivo XLSX não encontrado:', CLIENTES_DATA_PATH);
+        }
+        
+        // Verificar se o arquivo CSV existe
+        if (fs.existsSync(CSV_PATH)) {
+            const csvContent = fs.readFileSync(CSV_PATH, 'utf8');
             // Detecta delimitador automaticamente: se houver mais ';' que ',' na primeira linha, usa ';'
             const firstLine = csvContent.split('\n')[0];
             const delimiter = (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ';' : ',';
@@ -42,8 +51,12 @@ const loadClientesData = () => {
                 return newRow;
             });
             clientesData = normalizedRows.concat(clientesData);
+            console.log(`Dados carregados do CSV: ${normalizedRows.length} registros`);
+        } else {
+            console.warn('Arquivo CSV não encontrado:', CSV_PATH);
         }
-        console.log('Dados de clientes carregados com sucesso.');
+        
+        console.log('Dados de clientes carregados com sucesso. Total:', clientesData.length);
         // Logar todos os CNPJs carregados
         console.log('CNPJs carregados:', clientesData.map(c => c['cnpjemitente']));
     } catch (error) {
